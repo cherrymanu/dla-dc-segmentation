@@ -1,0 +1,337 @@
+\documentclass[sigconf]{acmart}
+\usepackage{graphicx}
+\usepackage{subcaption}
+\usepackage{amsmath, amsthm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algorithmicx}
+\usepackage{algpseudocode}
+\let\Bbbk\relax
+\usepackage{amssymb}
+
+\title{Divide-and-Conquer Document Layout Segmentation}
+
+\author{Charishma Manupati}
+\affiliation{\institution{University of Florida} \city{Gainesville} \country{United States}}
+\email{cmanupati@ufl.edu}
+
+\author{Nishigandha Mali}
+\affiliation{\institution{University of Florida} \city{Gainesville} \country{United States}}
+\email{malin1@ufl.edu}
+
+\begin{abstract}
+We present a divide-and-conquer (D\&C) algorithm for page layout segmentation that recursively partitions a document page using feature-guided XY-cuts and then performs a bottom-up greedy merge of adjacent small regions. The algorithm outputs a hierarchical segmentation tree and labeled regions (text, table, figure, blank). We prove termination and analyze time complexity under mild assumptions on split balance. Experiments on synthetic pages demonstrate near $O(N\log N)$ scaling with image size and good agreement between empirical and theoretical behavior.\end{abstract}
+
+\keywords{document layout analysis, divide-and-conquer, greedy algorithms, page segmentation}
+
+\ccsdesc[500]{Computing methodologies~Computer vision}
+\ccsdesc[500]{Theory of computation~Design and analysis of algorithms}
+\ccsdesc[500]{Applied computing~Document management and text processing}
+
+\begin{document}
+
+\maketitle
+
+\section{Introduction}
+Document layout segmentation decomposes a page into semantically meaningful regions such as text, tables, figures, and whitespace. We study a D\&C approach that recursively subdivides the page into smaller regions based on feature homogeneity—computed from projection profiles (identifying whitespace valleys and content peaks), edge density, and periodicity measures—until each region is sufficiently uniform according to predefined thresholds. Region boundaries are refined to better align with content, and adjacent leaf regions with compatible classifications are merged in a multi-pass post-processing step to avoid over-segmentation while preserving column boundaries. This yields an interpretable hierarchy and efficient runtime. Classic XY-cut and whitespace-based methods inform our splitting criteria~\cite{nagy1986document,breuel2002two}; we adopt Otsu's adaptive binarization for robustness~\cite{shafait2008efficient}.
+
+\section{Problem Identification and Abstraction}
+
+\subsection{Real-World Problem (10 points)}
+Document layout analysis is a fundamental task in digital libraries, archival systems, and automated document processing pipelines. When scanning physical documents (books, articles, forms, reports), the resulting images contain mixed content: paragraphs of text, tabular data, figures/diagrams, and whitespace. To enable downstream processing—such as optical character recognition (OCR), table extraction, or content-aware search—we must first identify and separate these distinct semantic regions. This problem arises in computer vision and document engineering, not from algorithm textbooks, making it a legitimate application domain.
+
+The challenge: given a single grayscale image of a document page, automatically decompose it into labeled rectangular regions corresponding to text blocks, tables, figures, and blank areas. Manual annotation is infeasible for large-scale digitization projects, necessitating automated solutions.
+
+\subsection{Abstraction (5 points)}
+We abstract the problem as follows:
+
+\textbf{Input:} A grayscale image $I \in [0,255]^{H \times W}$ representing a document page.
+
+\textbf{Output:} A partition of the image into a set of axis-aligned rectangles $\mathcal{R} = \{R_1, R_2, \ldots, R_k\}$ where each $R_i = (x_i, y_i, w_i, h_i, \ell_i)$ consists of coordinates $(x_i, y_i)$, dimensions $(w_i, h_i)$, and a label $\ell_i \in \{\text{text}, \text{table}, \text{figure}, \text{blank}\}$.
+
+\textbf{Tree representation:} The segmentation process produces a rooted binary tree $T = (V, E)$ where:
+\begin{itemize}
+    \item Each internal node $v \in V$ stores a split decision: either a horizontal cut at row $r$ or a vertical cut at column $c$.
+    \item Each leaf node stores a labeled region $R_i$.
+    \item The tree structure encodes the hierarchical decomposition: children of a node represent the subregions created by the split at that node.
+\end{itemize}
+
+\textbf{Graph structure:} After segmentation, regions can be viewed as nodes in a graph where edges connect adjacent regions (useful for the greedy merge phase).
+
+This abstraction reduces the continuous image space to discrete geometric objects (rectangles) and a combinatorial structure (tree), making the problem amenable to divide-and-conquer techniques.
+
+\section{Algorithm (10 points)}
+\label{sec:algorithm}
+
+Our divide-and-conquer algorithm consists of four main phases: (1) recursive XY-cut splitting with feature-guided valley detection, (2) region labeling using edge density, content density, and periodicity features, (3) boundary refinement to better align with content, and (4) multi-pass greedy merging with special handling for narrow columns. We present the main algorithm and key subroutines. The implementation is available in the modular \texttt{dla/src/} codebase.
+
+\subsection{Main Algorithm}
+\begin{algorithm}[t]
+\caption{Page Segmentation Algorithm}
+\begin{algorithmic}[1]
+\Function{SEGMENT-PAGE}{$I$, $min\_region$, $max\_depth$, $do\_merge$}
+    \State $I_{gray} \gets \text{ConvertToGrayscale}(I)$
+    \State $I_{bin} \gets \text{OtsuThreshold}(I_{gray})$
+    \State $min\_wh \gets \max(min\_region, \min(W, H) / 100)$
+    \State $\mathcal{R} \gets \text{XY-CUT}(I_{bin}, 0, 0, W, H, min\_wh, 0, max\_depth)$ \Comment{$\Theta(N \log N)$}
+    \For{$R \in \mathcal{R}$}
+        \State $R.\ell \gets \text{LabelRegion}(I_{gray}, R)$ \Comment{$\Theta(|R|)$ per region}
+    \EndFor
+    \State $\mathcal{R} \gets \text{RefineBoundaries}(I_{gray}, \mathcal{R})$ \Comment{$\Theta(N)$}
+    \If{$do\_merge$}
+        \State $\mathcal{R} \gets \text{GreedyMerge}(\mathcal{R}, pad=30)$ \Comment{$\Theta(k^2)$ where $k = |\mathcal{R}|$}
+        \State $\mathcal{R} \gets \text{MergeSmallAdjacent}(\mathcal{R}, max\_size=10000, pad=30)$
+        \State $\mathcal{R} \gets \text{SplitWideRegionsIntoColumns}(I_{gray}, \mathcal{R}, max\_width=80)$
+    \EndIf
+    \State \Return $\mathcal{R}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Divide-and-Conquer: Feature-Guided XY-Cut}
+The core recursive procedure partitions a rectangular region based on feature homogeneity. We compute projection profiles to identify whitespace valleys (gaps between content blocks) and use edge density to assess region uniformity. Regions are split where these features indicate inhomogeneity, continuing until each subregion is sufficiently uniform.
+
+\begin{algorithm}[t]
+\caption{XY-Cut Recursive Procedure}
+\begin{algorithmic}[1]
+\Function{XY-CUT}{$I_{bin}$, $x$, $y$, $w$, $h$, $min\_size$, $depth$, $max\_depth$}
+    \State $roi \gets I_{bin}[y:y+h, x:x+w]$
+    \If{$depth \geq max\_depth$ \textbf{or} \Call{FeatureStop}{$roi$, $min\_size$}}
+        \State \Return $[\text{Region}(x, y, w, h)]$ \Comment{Base case: $\Theta(1)$}
+    \EndIf
+    \State $V_v \gets \text{ProjectionValleys}(roi, \text{axis}=0)$ \Comment{$\Theta(w)$: vertical valleys}
+    \State $V_h \gets \text{ProjectionValleys}(roi, \text{axis}=1)$ \Comment{$\Theta(h)$: horizontal valleys}
+    \If{$depth \leq 6$} \Comment{Enhance column detection for early splits}
+        \State $V_v \gets \text{EnhanceVerticalSplits}(roi, V_v, w)$ \Comment{$\Theta(w)$}
+        \State $V_v \gets \text{DetectColumnBoundaries}(roi, V_v, w)$
+    \EndIf
+    \State $S_v \gets \text{SplitIndicesFromValleys}(V_v, w, min\_size)$ \Comment{$\Theta(|V_v|)$}
+    \State $S_h \gets \text{SplitIndicesFromValleys}(V_h, h, min\_size)$ \Comment{$\Theta(|V_h|)$}
+    \State $use\_vertical \gets \text{ChooseSplitDirection}(S_v, S_h, roi, w, h, depth)$
+    \If{$use\_vertical$ \textbf{and} $|S_v| > 1$}
+        \State $\mathcal{R} \gets []$
+        \For{$(x_s, x_e) \in S_v$}
+            \State $\mathcal{R} \gets \mathcal{R} \cup \text{XY-CUT}(I_{bin}, x+x_s, y, x_e-x_s, h, min\_size, depth+1, max\_depth)$ \Comment{Recursive: $k$ subproblems}
+        \EndFor
+        \State \Return $\mathcal{R}$
+    \ElsIf{$|S_h| > 1$}
+        \State $\mathcal{R} \gets []$
+        \For{$(y_s, y_e) \in S_h$}
+            \State $\mathcal{R} \gets \mathcal{R} \cup \text{XY-CUT}(I_{bin}, x, y+y_s, w, y_e-y_s, min\_size, depth+1, max\_depth)$ \Comment{Recursive: $k$ subproblems}
+        \EndFor
+        \State \Return $\mathcal{R}$
+    \EndIf
+    \State \Return $[\text{Region}(x, y, w, h)]$ \Comment{No good split found}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\textbf{ProjectionValleys:} For axis $a \in \{0,1\}$, compute the projection profile $P[i] = \sum_j (255 - I_{bin}[i,j])$ (summing along the perpendicular axis), which measures content density along that axis. Normalize to $[0,1]$. For vertical projections (axis=0), find valleys (low-content gaps) using adaptive percentile thresholds based on content density. For horizontal projections (axis=1), find peaks (high-content areas) that indicate row boundaries. The algorithm uses adaptive thresholds: sparse content regions use mean+std-based thresholds, while dense regions use percentile-based thresholds (60th-80th percentiles). This identifies split points where the region is inhomogeneous.
+
+\textbf{EnhanceVerticalSplits:} For early recursion levels ($depth \leq 6$), enhance column detection by identifying consistent low-content regions using sliding windows and checking for common column boundary positions (48px, 68px, 88px, etc.). This helps detect narrow columns that might be missed by standard projection analysis.
+
+\textbf{FeatureStop:} Return true if $w < min\_size$ or $h < min\_size$ or edge density $< 0.01$ (region is sufficiently uniform—mostly blank or homogeneous). The edge density is computed using Canny edge detection. The threshold ensures we stop when further splitting would not improve segmentation quality.
+
+\subsection{Labeling Heuristic}
+Each region is classified using multiple features computed on a cropped region (with margins removed to avoid edge artifacts):
+\begin{itemize}
+    \item \textbf{Edge density:} $\rho = \text{mean}(\text{Canny}(roi, 50, 150))$ computed on the cropped region
+    \item \textbf{Content density:} $\delta = \text{count}(\text{dark pixels}) / \text{total pixels}$ using Otsu thresholding
+    \item \textbf{Periodicity:} $p_h, p_v = \text{FFTPeakiness}(\text{projections})$ computed on downsampled projections. For a projection $P$, we compute $\text{FFT}(P - \bar{P})$, take magnitude, and compute peakiness as $\max(\text{mag}[2:\text{len}/2]) / \text{mean}(\text{mag}[2:\text{len}/2])$ (excluding DC component).
+    \item \textbf{Edge structure:} For tables, we check for both horizontal and vertical edge lines by thresholding edge projections.
+\end{itemize}
+
+Classification rules (applied in order):
+\begin{enumerate}
+    \item \textbf{Blank:} If $\delta < 0.005$ and $\rho < 0.01$, or if region is very small ($w < 50, h < 50$) with $\delta < 0.01$ and $\rho < 0.02$.
+    \item \textbf{Table:} If both horizontal and vertical edge lines are detected ($\geq 3$ lines each) with balanced edge distribution, OR if $p_h > 2.5$ and $p_v > 2.5$ (strong periodicity in both directions).
+    \item \textbf{Figure:} If $\rho > 0.15$ (very high edge density, indicating complex structure).
+    \item \textbf{Text:} If $p_h > 2.5$ and $p_v < 1.8$ (strong horizontal periodicity from text lines, weak vertical periodicity).
+    \item \textbf{Default:} Label as \text{text} if none of the above conditions are met.
+\end{enumerate}
+
+\subsection{Greedy Merge}
+The merge phase consists of two steps: (1) greedy merging of adjacent regions, and (2) merging small adjacent regions in the same column.
+
+\textbullet \textbf{Step 1 - Greedy Merge:} Iteratively merge adjacent regions with compatible labels. Two regions are considered adjacent if their bounding boxes (expanded by padding $p = 30$ pixels) overlap. Regions are merged if:
+  - They have the same label, OR
+  - Both are text regions (even if labels differ slightly), OR
+  - They are in the same column (vertical alignment) and both are content regions (text/table/figure).
+
+For same-column regions, we use increased padding ($1.5p$) to merge text regions more aggressively. For narrow columns ($w < 80$px), we are conservative about horizontal merging to avoid merging separate columns.
+
+\textbullet \textbf{Step 2 - Merge Small Adjacent:} After initial merging, we merge very small adjacent regions ($\text{area} < 10,000$ pixels) that are in the same column, using padding $p = 30$. This helps fix over-segmentation where many tiny regions were created.
+
+\textbf{Boundary Refinement:} Before merging, region boundaries are refined to better fit content by shrinking boundaries to remove whitespace margins, improving alignment with ground truth.
+
+\section{Proof of Correctness (10 points)}
+
+We prove three properties: termination, validity (output is a partition), and soundness of the stopping criterion.
+
+\subsection{Termination}
+\textbf{Proposition.} The XY-CUT procedure terminates for any input image $I$ of size $N = H \times W$ pixels.
+
+\textbf{Pf.} We show that every recursive path is finite. Consider recursion depth $d$ and region dimensions $(w, h)$.
+
+\textbullet \textbf{Case 1:} If $d \geq max\_depth$, the base case returns immediately.
+
+\textbullet \textbf{Case 2:} If $w < min\_size$ or $h < min\_size$, \textsc{FeatureStop} returns true, triggering the base case.
+
+\textbullet \textbf{Case 3:} If edge density $< 0.01$, the region is treated as blank and recursion stops.
+
+\textbullet \textbf{Case 4:} Otherwise, a split occurs. Each split creates subregions with strictly smaller area. Since area is bounded below by $min\_size^2$ and decreases by at least a constant factor, after at most $O(\log(N/min\_size^2))$ levels, we reach the minimum size threshold.
+
+Therefore, every path terminates. The greedy merge phase also terminates because each merge reduces the number of regions by at least 1, and the initial number is finite. $\square$
+
+\subsection{Validity (Partition Property)}
+\textbf{Proposition.} The output $\mathcal{R}$ is a partition of the input image: regions are pairwise disjoint and their union covers the entire image $[0, W) \times [0, H)$.
+
+\textbf{Pf.} We prove by structural induction on the recursion tree.
+
+\textbullet \textbf{Base case:} A leaf region $R = (x, y, w, h)$ covers exactly the rectangle $[x, x+w) \times [y, y+h)$.
+
+\textbullet \textbf{Inductive step:} Suppose a node splits region $R$ into children $\{R_1, \ldots, R_k\}$.
+
+For a vertical split at positions $\{x_0, x_1, \ldots, x_k\}$ where $x_0 = 0$ and $x_k = w$: each child $R_i = (x + x_i, y, x_{i+1} - x_i, h)$ for $i = 0, \ldots, k-1$. The x-intervals $[x + x_i, x + x_{i+1})$ are disjoint and cover $[x, x+w)$. Since all children share the same y-range $[y, y+h)$, the regions $R_i$ are pairwise disjoint and $\bigcup_{i=0}^{k-1} R_i = R$. Similarly for horizontal splits.
+
+By induction, all leaf regions form a partition of the root region (the entire image).
+
+\textbullet Merging preserves the partition property: if regions $R_i$ and $R_j$ are adjacent and merged into $R' = \text{bounding-box}(R_i \cup R_j)$, then $R'$ covers exactly $R_i \cup R_j$, and other regions remain unchanged. Since we only merge adjacent regions, the union of all regions remains the full image, and disjointness is maintained. $\square$
+
+\subsection{Soundness of Stopping Criterion}
+\textbf{Proposition.} The feature-based stopping criterion in \textsc{FeatureStop} prevents over-segmentation of uniform regions.
+
+\textbf{Pf.} If a region has edge density $< 0.01$, it contains almost no structure (mostly blank or uniform). Further splitting would create subregions that are also uniform, providing no semantic benefit. The minimum size constraint ensures we don't create regions smaller than a meaningful unit (e.g., a single character). Together, these criteria ensure that recursion stops when further division would not improve the segmentation quality. $\square$
+
+\section{Running Time Analysis (5 points)}
+
+Let $N = H \times W$ denote the total number of pixels in the input image.
+
+\subsection{Work per Recursive Call}
+At each node, we compute:
+\textbullet Projection profiles: $O(w)$ for vertical projection (sum over rows), $O(h)$ for horizontal projection (sum over columns), totaling $O(w + h) = O(\max(w, h))$.
+\textbullet Valley detection: $O(w)$ or $O(h)$ for scanning and grouping valleys, with adaptive threshold computation $O(w)$ or $O(h)$.
+\textbullet Column enhancement (early depths): $O(w)$ for sliding window analysis and boundary detection.
+\textbullet Edge detection (Canny) for stopping criterion: $O(wh)$ for the region of size $w \times h$.
+\textbullet Split quality computation: $O(k \cdot \max(w, h))$ where $k$ is the number of split candidates.
+
+The dominant cost is edge detection for the stopping criterion: $O(wh)$ per node. For a region covering $A$ pixels, this is $O(A)$. Valley detection and enhancement add $O(\max(w, h))$ per node, which is subsumed by $O(A)$ for typical aspect ratios.
+
+\subsection{Recurrence Relation}
+Let $T(A)$ be the time to process a region of $A$ pixels.
+
+\textbullet \textbf{Best/Expected Case (Balanced Splits):} If each split divides the region roughly in half, we have:
+$$T(A) = 2T(A/2) + cA$$
+where $c$ is a constant. Solving via the Master Theorem (Case 2): $T(A) = O(A \log A)$. Since $A \leq N$ and we process disjoint regions that partition the image, the total time is $O(N \log N)$.
+
+\textbullet \textbf{Worst Case (Highly Unbalanced):} If splits are extremely unbalanced (e.g., always split off a tiny region), the depth could be $O(N)$. However, we cap depth at $max\_depth = 25$ (which is $O(\log N)$ for typical image sizes). In this case:
+$$T(N) = O(ND) = O(N \log N)$$
+where $D$ is the maximum depth.
+
+\subsection{Labeling and Merging}
+\textbullet Labeling each of $k$ regions takes $O(k \cdot \bar{A})$ where $\bar{A}$ is average region area. For each region, we compute: Canny edges $O(\bar{A})$, FFT on downsampled projections $O(\max(w, h) \log \max(w, h))$, and edge structure analysis $O(\bar{A})$. Since regions partition the image, $\sum_i A_i = N$, and the FFT term is dominated by $O(\bar{A})$ for typical regions, total labeling is $O(N)$.
+
+\textbullet Boundary refinement: For each region, we scan boundaries to shrink whitespace, taking $O(\text{perimeter}) = O(\max(w, h))$ per region. Total: $O(k \cdot \max(\bar{w}, \bar{h})) = O(N)$ since regions partition the image.
+
+\textbullet Greedy merge: In the worst case, we iterate until no merges remain. Each iteration scans all regions: $O(k^2)$ comparisons for adjacency checks. Since $k = O(N)$ in the worst case, merge could be $O(N^2)$. However, in practice, regions are spatially localized, and adjacency checks with padding limit comparisons to nearby regions. The merge-small-adjacent step also takes $O(k^2)$ in the worst case. With spatial indexing (not implemented but possible), both merge steps reduce to $O(k \log k)$.
+
+\textbf{Overall Complexity:} $O(N \log N)$ for segmentation + $O(N)$ for labeling + $O(N)$ for refinement + $O(k^2)$ for merging, where $k$ is typically much smaller than $N$ (often $k = O(\sqrt{N})$ for typical documents). The dominant term is $O(N \log N)$ for the recursive segmentation phase.
+
+\section{Algorithm Explanation in Domain Language (5 points)}
+
+In the language of document processing, our algorithm works as follows:
+
+\textbf{Step 1: Preprocessing.} Convert the scanned page to grayscale and binarize it (convert to black-and-white) using Otsu's adaptive thresholding to handle varying lighting and paper quality. This creates a binary image where content pixels are black and background is white.
+
+\textbf{Step 2: Recursive Splitting.} Starting with the entire page, we look for natural boundaries between content blocks. We compute projection profiles: for each column (vertical projection), we sum the darkness of pixels across all rows. Where the sum is very low, we have a ``valley''—a gap of whitespace that likely separates two content blocks (e.g., the gap between two columns of text). Similarly, for horizontal projections, we find peaks (high-content areas) that indicate row boundaries. 
+
+For early recursion levels, we enhance column detection by looking for common column widths (48px, 68px, 88px, etc.) and using sliding windows to find consistent gaps. We choose the split direction (horizontal or vertical) based on split quality—preferring splits that separate regions with different content densities and yield balanced subregions. For narrow pages, we prioritize vertical splits to find column boundaries. We then recursively apply the same process to each resulting subregion. This continues until regions are too small to meaningfully subdivide (below minimum size threshold), reach maximum depth, or appear uniform (mostly blank with low edge density).
+
+\textbf{Step 3: Boundary Refinement.} Before labeling, we refine region boundaries by shrinking them to remove whitespace margins, ensuring better alignment with actual content.
+
+\textbf{Step 4: Classification.} For each detected region, we analyze its visual characteristics. We compute edge density using Canny edge detection, content density (ratio of dark pixels), and periodicity using FFT on projection profiles. Text regions show strong horizontal periodicity (regular line spacing) but weak vertical periodicity. Tables show strong periodicity in both directions and have balanced horizontal/vertical edge structure. Figures have very high edge density (many sharp transitions from complex structures). Blank areas have very low content and edge density. We assign labels using a hierarchical rule set.
+
+\textbf{Step 5: Post-processing.} Sometimes, the recursive splitting creates overly fine-grained segments (e.g., a single paragraph split into multiple tiny boxes). We greedily merge adjacent regions that share compatible labels, with special handling for same-column regions and narrow columns. We then merge very small adjacent regions in the same column to fix over-segmentation. This combines regions into larger, more meaningful blocks while preserving column boundaries.
+
+The result is a hierarchical tree structure: the root represents the entire page, internal nodes represent split decisions, and leaves represent the final labeled regions. This tree can be used to understand the document's layout structure and to extract content for downstream processing such as OCR, table extraction, or content-aware search.
+
+\section{Experimental Evaluation and Runtime Verification (5 points)}
+
+We validate our theoretical analysis through controlled experiments on synthetic document pages.
+
+\subsection{Experimental Setup}
+We generate synthetic multi-column pages using a synthetic data generator that creates pages with known ground-truth regions. The generator randomly places 1-3 columns, each containing text blocks (simulated as horizontal lines), tables (grid structures), figures (noise + random rectangles), and blank regions. We test at multiple resolutions: 266$\times$400, 600$\times$400, 900$\times$600, 1200$\times$800, and 1500$\times$1000 pixels. We generate 30-220 pages per resolution to ensure statistical significance. Ground-truth bounding boxes and labels are known, enabling accurate evaluation.
+
+We measure:
+\textbullet \textbf{Runtime:} Wall-clock time for segmentation (median over pages per resolution)
+\textbullet \textbf{Accuracy:} Macro F1 score at IoU threshold 0.5 (mean over pages), computed per-class (text, table, figure, blank) using greedy matching
+\textbullet \textbf{IoU statistics:} Average IoU between matched predicted and ground-truth regions
+
+The segmentation algorithm (implemented in \texttt{dla/src/}) uses parameters: $min\_region = 20$, $max\_depth = 25$, with adaptive binarization using Otsu thresholding. Experiments are run using \texttt{dla/run\_experiments.py}.
+
+\subsection{Runtime Scaling Verification}
+Figure~\ref{fig:runtime} shows a log-log plot of runtime (milliseconds) versus total pixels ($N = W \times H$). According to our analysis, we expect $T(N) = O(N \log N)$. To verify, we fit a curve of the form $T(N) = a \cdot N \log N + b$ to the data using the implementation in \texttt{dla/run\_experiments.py}. The log-log scale makes it easier to verify complexity: $O(N \log N)$ appears as a line with a slight upward curve, distinct from $O(N)$ (linear) and $O(N^2)$ (quadratic) reference lines.
+
+The experimental data shows that runtime grows sub-quadratically but super-linearly, consistent with $O(N \log N)$. In log-log space, the measured runtime closely follows the fitted $O(N \log N)$ curve, lying between the $O(N)$ and $O(N^2)$ reference lines. The fitted model achieves $R^2 > 0.96$, confirming excellent agreement with the theoretical $O(N \log N)$ complexity.
+
+\subsection{Accuracy Results}
+Figure~\ref{fig:accuracy} shows that segmentation accuracy (F1 macro) remains stable across resolutions, indicating that the algorithm scales well without degrading quality. This is expected because the feature-based stopping criterion adapts to region size.
+
+\subsection{Theoretical-Experimental Agreement}
+The empirical runtime curve matches our theoretical prediction of $O(N \log N)$:
+\textbullet For small images ($N \approx 240,000$), runtime is approximately linear.
+\textbullet As $N$ increases, the $\log N$ factor becomes more pronounced, causing the curve to bend upward.
+\textbullet The slope in log-log space (if we plot $\log T$ vs. $\log N$) should be approximately 1 (indicating $N \log N$ behavior, which appears linear in log space with a slight upward trend).
+
+This agreement validates our complexity analysis and confirms that the divide-and-conquer approach achieves efficient scaling.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{runtime_loglog.png}
+  \caption[Log-log plot of runtime vs. pixels]{Log-log plot of runtime vs. pixels. Generated by \texttt{dla/run\_experiments.py} using the modular implementation in \texttt{dla/src/}. The measured runtime (blue circles) closely follows the $O(N \log N)$ fit (red line), confirming linearithmic scaling. Reference lines for $O(N)$ (green dashed) and $O(N^2)$ (purple dashed) are shown for comparison.}
+  \label{fig:runtime}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{accuracy_vs_resolution.png}
+  \caption[Accuracy vs. resolution plot]{Macro F1 vs. pixels on synthetic pages (IoU$\ge0.5$). Generated by \texttt{dla/run\_experiments.py} evaluating the \texttt{dla/src/} implementation.}
+  \label{fig:accuracy}
+\end{figure}
+
+\section{Related Work}
+Classical XY-cut and whitespace analysis underpin many page segmentation systems~\cite{nagy1986document,breuel2002two}. Robust binarization~\cite{shafait2008efficient} and noise models~\cite{baird1990document} inform preprocessing. Our contribution is a simple feature-guided D\&C approach with lightweight labeling heuristics that match the course's D\&C focus.
+
+\section{Conclusion}
+We provided an interpretable D\&C page segmentation algorithm, analyzed its runtime, and validated its empirical behavior. Future work includes learned split scoring and robust labeling via small CNNs.
+
+\appendix
+\section{Implementation Details}
+We use OpenCV for image preprocessing (grayscale conversion, Otsu thresholding, Canny edge detection), NumPy for array operations and FFT-based periodicity measures, and Python dataclasses for region representation. The algorithm is implemented in Python with a modular architecture in the \texttt{dla/} directory:
+
+\begin{itemize}
+    \item \texttt{dla/src/main.py}: Main pipeline that orchestrates preprocessing, segmentation, labeling, and merging
+    \item \texttt{dla/src/preprocessing.py}: Image preprocessing (grayscale conversion, adaptive binarization)
+    \item \texttt{dla/src/xycut.py}: Core XY-cut recursive segmentation algorithm with projection valley detection
+    \item \texttt{dla/src/labeling.py}: Region classification using edge density, content density, and FFT-based periodicity
+    \item \texttt{dla/src/merge.py}: Greedy merging algorithms for combining adjacent compatible regions
+    \item \texttt{dla/src/region.py}: Region dataclass and utility functions
+    \item \texttt{code/generate\_synthetic.py}: Synthetic document generator that creates multi-column pages with known ground-truth regions
+    \item \texttt{code/evaluate.py}: Evaluation metrics (IoU, precision, recall, F1) with greedy matching
+    \item \texttt{dla/run\_experiments.py}: Experiment runner that generates data, runs segmentation, evaluates, and creates plots
+\end{itemize}
+
+The modular design separates concerns: preprocessing, segmentation, labeling, and merging are implemented as independent modules, making the codebase easier to understand, test, and maintain. The implementation follows the divide-and-conquer algorithm described in Section~\ref{sec:algorithm}, with recursive XY-cut splitting and bottom-up greedy merging.
+
+\section{LLM Usage Disclosure}
+We used LLM assistance for drafting text and code boilerplate. As required, include the exact prompts and full outputs used during development as an appendix (attach or paste into a companion PDF/section submitted with this paper).
+
+\section{Code Appendix}
+All source code used to validate runtime analysis (segmentation, synthetic data, evaluation, experiments) is included in the \texttt{dla/} directory (main implementation) and \texttt{code/} directory (evaluation utilities). The modular implementation in \texttt{dla/src/} clearly separates the algorithm components: preprocessing, XY-cut recursion, labeling, and merging. Plots referenced in the paper are produced by \texttt{dla/run\_experiments.py} and saved under \texttt{dla/outputs/plots/}.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{refs}
+
+\end{document}
+
+

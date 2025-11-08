@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Output files
+outputs/
+dla/outputs/
+*.png
+*.jpg
+*.json
+!docs/paper/*.png
+!docs/paper/*.jpg
+
+# Temporary files
+*.log
+*.tmp
+temp_*
+*.csv
+!dla/experiments/runtime_data.csv
+
+# LaTeX
+*.aux
+*.log
+*.out
+*.toc
+*.bbl
+*.blg
+*.synctex.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+code.zip
+experiment_output.txt
+*.pdf
+!docs/paper/*.pdf
+
