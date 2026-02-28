@@ -1,5 +1,10 @@
 """Test the complete segmentation pipeline."""
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import cv2
 import numpy as np
 
@@ -63,7 +68,7 @@ def test_complete_pipeline():
     print(" TESTING COMPLETE DOCUMENT LAYOUT SEGMENTATION PIPELINE")
     print("=" * 70 + "\n")
     
-    # Run complete pipeline
+    # Run complete pipeline (paths relative to dla/)
     original, gray, binary, regions = segment_document(
         "inputs/academic.jpg",
         min_region=80,
@@ -87,6 +92,7 @@ def test_complete_pipeline():
     print("\n" + "-" * 70)
     print("VISUALIZATION")
     print("-" * 70)
+    os.makedirs("outputs", exist_ok=True)
     visualize_final_segmentation(original, regions, 
                                  "outputs/final_segmentation.jpg")
     
@@ -105,4 +111,3 @@ def test_complete_pipeline():
 
 if __name__ == "__main__":
     test_complete_pipeline()
-

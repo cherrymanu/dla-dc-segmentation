@@ -34,7 +34,6 @@ dla/outputs/
 *.tmp
 temp_*
 *.csv
-!dla/experiments/runtime_data.csv
 
 # LaTeX
 *.aux

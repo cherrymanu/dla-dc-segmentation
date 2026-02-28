@@ -1,5 +1,10 @@
 """Quick test script for Region dataclass."""
 
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from src.region import Region
 
 
@@ -48,4 +53,3 @@ def test_region():
 
 if __name__ == "__main__":
     test_region()
-

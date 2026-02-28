@@ -17,23 +17,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import curve_fit
 
-# Add parent directory to path
-current_dir = os.path.dirname(os.path.abspath(__file__))
-parent_dir = os.path.dirname(current_dir)
-sys.path.insert(0, current_dir)
-sys.path.insert(0, parent_dir)
+# Paths: this script lives in dla/experiments/; run from dla/ (cwd = dla)
+_script_dir = os.path.dirname(os.path.abspath(__file__))   # dla/experiments
+_dla_dir = os.path.dirname(_script_dir)                     # dla
+_project_root = os.path.dirname(_dla_dir)                   # project root
+sys.path.insert(0, _dla_dir)
 
-# Import from parent directory's code folder
+# Import from project root's code folder
 import importlib.util
-spec_synth = importlib.util.spec_from_file_location("generate_synthetic", 
-    os.path.join(parent_dir, "code", "generate_synthetic.py"))
+spec_synth = importlib.util.spec_from_file_location("generate_synthetic",
+    os.path.join(_project_root, "code", "generate_synthetic.py"))
 generate_synthetic = importlib.util.module_from_spec(spec_synth)
 spec_synth.loader.exec_module(generate_synthetic)
 generate_synthetic_document = generate_synthetic.generate_synthetic_document
 save_document = generate_synthetic.save_document
 
-spec_eval = importlib.util.spec_from_file_location("evaluate", 
-    os.path.join(parent_dir, "code", "evaluate.py"))
+spec_eval = importlib.util.spec_from_file_location("evaluate",
+    os.path.join(_project_root, "code", "evaluate.py"))
 evaluate = importlib.util.module_from_spec(spec_eval)
 spec_eval.loader.exec_module(evaluate)
 evaluate_one = evaluate.evaluate_one
@@ -377,7 +377,7 @@ def main():
     print("COMPREHENSIVE EXPERIMENTS FOR DLA/ CODE")
     print("=" * 70)
     
-    # Create output directories
+    # Create output directories (relative to cwd = dla/)
     os.makedirs("outputs/images", exist_ok=True)
     os.makedirs("outputs/gt", exist_ok=True)
     os.makedirs("outputs/pred", exist_ok=True)
@@ -444,9 +444,9 @@ def main():
             "outputs/plots/runtime_vs_pixels.png"
         )
     
-    # Copy plots to paper directory
+    # Copy plots to paper directory (project root docs/paper)
     import shutil
-    paper_plots_dir = "../docs/paper"
+    paper_plots_dir = os.path.join(_project_root, "docs", "paper")
     if os.path.exists(paper_plots_dir):
         if accuracy_results:
             shutil.copy("outputs/plots/accuracy_vs_resolution.png", 
@@ -470,4 +470,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -6,12 +6,12 @@ Implementation of a divide-and-conquer algorithm for document page segmentation 
 
 ```
 dla/
-├── inputs/          # Input document images
-├── src/             # Source code
-├── outputs/         # Segmentation results and visualizations
-│   └── plots/       # Runtime analysis plots
-├── experiments/     # Runtime analysis scripts
-└── requirements.txt # Python dependencies
+├── src/               # Core algorithm only (preprocessing, xycut, labeling, merge, region)
+├── experiments/       # run_experiments.py, runtime_analysis.py, plot_results.py
+├── tests/             # Unit tests (test_pipeline, test_xycut, test_labeling, …)
+├── inputs/            # Sample input images
+├── outputs/           # Generated results (gitignored)
+└── requirements.txt
 ```
 
 ## Installation
@@ -29,11 +29,27 @@ pip install -r requirements.txt
 
 ## Usage
 
-```python
-from src.main import segment_page
+Run from the `dla/` directory so that paths like `inputs/` resolve correctly.
 
-# Segment a document image
-regions = segment_page('inputs/academic.jpg')
+```python
+from src.main import segment_document
+
+# Segment a document image (returns original, gray, binary, regions)
+_, _, _, regions = segment_document('inputs/academic.jpg')
+```
+
+## Experiments
+
+```bash
+cd dla
+python experiments/run_experiments.py
+```
+
+## Tests
+
+```bash
+cd dla
+python tests/test_pipeline.py   # or test_xycut, test_labeling, test_preprocessing, test_region
 ```
 
 ## Algorithm Complexity

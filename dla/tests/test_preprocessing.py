@@ -1,6 +1,9 @@
 """Test script for preprocessing utilities."""
 
 import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.preprocessing import (get_content_density, load_image, otsu_binarize,
                                preprocess_image, save_image, to_grayscale,
@@ -12,7 +15,7 @@ def test_preprocessing():
     
     print("=== Testing Preprocessing Pipeline ===\n")
     
-    # Input and output paths
+    # Input and output paths (relative to dla/)
     input_path = "inputs/academic.jpg"
     output_dir = "outputs"
     os.makedirs(output_dir, exist_ok=True)
@@ -54,4 +57,3 @@ def test_preprocessing():
 
 if __name__ == "__main__":
     test_preprocessing()
-

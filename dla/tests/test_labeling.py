@@ -1,5 +1,10 @@
 """Test region labeling."""
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import cv2
 import numpy as np
 
@@ -77,6 +82,7 @@ def test_labeling():
     
     # Visualize
     print(f"\n5. Creating visualization...")
+    os.makedirs("outputs", exist_ok=True)
     visualize_labeled_regions(original, labeled_regions, 
                               "outputs/labeled_result.jpg")
     
@@ -87,4 +93,3 @@ def test_labeling():
 
 if __name__ == "__main__":
     test_labeling()
-

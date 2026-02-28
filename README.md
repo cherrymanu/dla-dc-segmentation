@@ -10,27 +10,28 @@ This project implements a divide-and-conquer approach to segment document images
 
 ```
 .
-├── dla/                    # Main implementation (modular architecture)
-│   ├── src/               # Core algorithm modules
-│   │   ├── main.py        # Main pipeline orchestrator
-│   │   ├── preprocessing.py  # Image preprocessing (grayscale, binarization)
-│   │   ├── xycut.py       # XY-cut recursive segmentation
-│   │   ├── labeling.py    # Region classification (text/table/figure/blank)
-│   │   ├── merge.py       # Greedy merging algorithms
-│   │   └── region.py      # Region dataclass and utilities
-│   ├── experiments/       # Runtime and accuracy experiments
-│   ├── inputs/           # Sample input images
-│   ├── outputs/           # Segmentation results and plots
-│   └── run_experiments.py # Experiment runner
-├── code/                  # Evaluation utilities
-│   ├── evaluate.py        # IoU, precision, recall, F1 metrics
-│   ├── generate_synthetic.py  # Synthetic data generator
-│   └── run_experiments.py # Legacy experiment runner
-├── docs/paper/            # LaTeX paper
-│   ├── main.tex          # Main paper document
-│   ├── refs.bib          # Bibliography
-│   └── *.png             # Figures (runtime, accuracy plots)
-└── README.md             # This file
+├── dla/                      # Main implementation
+│   ├── src/                  # Core algorithm (library code only)
+│   │   ├── main.py           # Pipeline orchestrator
+│   │   ├── preprocessing.py  # Grayscale, Otsu binarization
+│   │   ├── xycut.py          # Recursive XY-cut segmentation
+│   │   ├── labeling.py       # Region classification
+│   │   ├── merge.py          # Greedy merging (post-processing)
+│   │   └── region.py         # Region dataclass
+│   ├── experiments/          # run_experiments.py, runtime_analysis, plot_results
+│   ├── tests/                # Unit tests (test_pipeline, test_xycut, …)
+│   ├── inputs/               # Sample images
+│   ├── outputs/              # Results (gitignored)
+│   └── requirements.txt
+├── code/                     # Shared utilities (used by dla)
+│   ├── evaluate.py          # IoU, precision, recall, F1
+│   └── generate_synthetic.py # Synthetic document generator
+├── docs/paper/               # Paper
+│   ├── main.tex
+│   ├── refs.bib
+│   └── *.png                 # Paper figures
+├── README.md
+└── requirements.txt
 ```
 
 ## 🚀 Quick Start
@@ -65,7 +66,7 @@ original, gray, binary, regions = segment_document(
 
 ```bash
 cd dla
-python run_experiments.py
+python experiments/run_experiments.py
 ```
 
 This will:
@@ -101,10 +102,11 @@ The complete LaTeX paper with algorithm descriptions, proofs of correctness, and
 
 ```bash
 cd dla
-python test_pipeline.py      # Test full pipeline
-python test_xycut.py         # Test XY-cut algorithm
-python test_labeling.py      # Test region labeling
-python test_preprocessing.py # Test image preprocessing
+python tests/test_pipeline.py      # Test full pipeline
+python tests/test_xycut.py         # Test XY-cut algorithm
+python tests/test_labeling.py      # Test region labeling
+python tests/test_preprocessing.py # Test image preprocessing
+python tests/test_region.py        # Test Region dataclass
 ```
 
 ## 📝 Requirements
@@ -117,15 +119,9 @@ python test_preprocessing.py # Test image preprocessing
 
 See `requirements.txt` for full list.
 
-## 👥 Authors
 
-- **Charishma Manupati** - University of Florida (cmanupati@ufl.edu)
-- **Nishigandha Mali** - University of Florida (malin1@ufl.edu)
+The **greedy merge algorithm** (`dla/src/merge.py`) and its integration in this pipeline were implemented independently. The divide-and-conquer XY-cut and labeling components were developed as part of a team project.
 
 ## 📚 References
 
-See `docs/paper/refs.bib` for complete bibliography.
-
-## 📄 License
-
-This project is part of an academic course assignment.
+See `docs/paper/refs.bib` for the bibliography.

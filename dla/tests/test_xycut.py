@@ -1,5 +1,10 @@
 """Test XY-Cut segmentation algorithm."""
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import cv2
 import numpy as np
 
@@ -42,7 +47,7 @@ def test_xycut():
     
     print("=== Testing XY-Cut Segmentation ===\n")
     
-    # Load and preprocess
+    # Load and preprocess (paths relative to dla/)
     print("1. Preprocessing image...")
     original, gray, binary = preprocess_image("inputs/academic.jpg")
     
@@ -72,6 +77,7 @@ def test_xycut():
     
     # Visualize
     print(f"\n5. Creating visualization...")
+    os.makedirs("outputs", exist_ok=True)
     visualize_regions(original, regions, "outputs/xycut_result.jpg")
     
     print("\n✓ XY-Cut test completed!")
@@ -80,4 +86,3 @@ def test_xycut():
 
 if __name__ == "__main__":
     test_xycut()
-
